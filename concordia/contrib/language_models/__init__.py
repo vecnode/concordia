@@ -15,6 +15,7 @@
 """Utilities for loading language models."""
 
 import importlib
+import inspect
 import types
 
 from concordia.language_model import language_model
@@ -65,6 +66,7 @@ def language_model_setup(
     api_key: str | None = None,
     device: str | None = None,
     disable_language_model: bool = False,
+    seed: int | None = None,
 ) -> language_model.LanguageModel:
   """Get the wrapped language model.
 
@@ -76,6 +78,10 @@ def language_model_setup(
     disable_language_model: If True then disable the language model. This uses a
       model that returns an empty string whenever asked for a free text response
       and a randome option when asked for a choice.
+    seed: Fixed generation seed for run-to-run reproducibility, passed to the
+      model's constructor only if that backend's __init__ accepts a `seed`
+      argument (checked via introspection, so this is a no-op for backends
+      that don't support it rather than a crash).
 
   Returns:
     The wrapped language model.
@@ -94,4 +100,6 @@ def language_model_setup(
   except KeyError as error:
     raise ValueError(f'Unrecognized api_type: {api_type}') from error
   cls = _import_model(model_path)
+  if seed is not None and 'seed' in inspect.signature(cls.__init__).parameters:
+    kwargs['seed'] = seed
   return cls(**kwargs)

@@ -49,6 +49,7 @@ class OllamaLanguageModel(language_model.LanguageModel):
       system_message: str = _DEFAULT_SYSTEM_MESSAGE,
       measurements: measurements_lib.Measurements | None = None,
       channel: str = language_model.DEFAULT_STATS_CHANNEL,
+      seed: int | None = None,
   ) -> None:
     """Initializes the instance.
 
@@ -59,11 +60,18 @@ class OllamaLanguageModel(language_model.LanguageModel):
           model.
         measurements: The measurements object to log usage statistics to.
         channel: The channel to write the statistics to.
+        seed: Fixed generation seed passed to Ollama's API on every call, for
+          run-to-run reproducibility. Note this is a single seed for the
+          model instance's lifetime (nothing upstream in Concordia's engine
+          currently passes a per-call seed to sample_text/sample_choice), so
+          it makes an entire simulation run reproducible given an identical
+          sequence of prompts, not each individual call independently.
     """
     self._model_name = model_name
     self._client = ollama.Client()
     self._system_message = system_message
     self._terminators = []
+    self._seed = seed
 
     self._measurements = measurements
     self._channel = channel
@@ -81,22 +89,26 @@ class OllamaLanguageModel(language_model.LanguageModel):
       timeout: float = -1,
       seed: int | None = None,
   ) -> str:
-    del max_tokens, timeout, seed  # Unused.
+    del max_tokens, timeout, seed  # Unused (no per-call seed is passed in).
 
     prompt_with_system_message = f'{self._system_message}\n\n{prompt}'
 
     terminators = self._terminators + list(terminators)
 
+    options = {
+        'stop': terminators,
+        'temperature': temperature,
+        'top_p': top_p,
+        'top_k': top_k,
+    }
+    if self._seed is not None:
+      options['seed'] = self._seed
+
     response = self._client.generate(
         model=self._model_name,
         prompt=prompt_with_system_message,
         think=False,
-        options={
-            'stop': terminators,
-            'temperature': temperature,
-            'top_p': top_p,
-            'top_k': top_k,
-        },
+        options=options,
         keep_alive='10m',
     )
     result = response['response']
@@ -116,7 +128,7 @@ class OllamaLanguageModel(language_model.LanguageModel):
       *,
       seed: int | None = None,
   ) -> tuple[int, str, dict[str, float]]:
-    del seed  # Unused.
+    del seed  # Unused (no per-call seed is passed in).
     prompt_with_system_message = f'{self._system_message}\n\n{prompt}'
     template = {'choice': '', 'single sentence explanation': ''}
     sample = ''
@@ -127,6 +139,12 @@ class OllamaLanguageModel(language_model.LanguageModel):
           attempts, _MAX_MULTIPLE_CHOICE_ATTEMPTS
       )
 
+      options = {'stop': (), 'temperature': temperature}
+      if self._seed is not None:
+        # Offset by attempt number so retries don't repeat the exact same
+        # (seed, temperature) pair and get stuck resampling the same output.
+        options['seed'] = self._seed + attempts
+
       response = self._client.generate(
           model=self._model_name,
           prompt=(
@@ -134,7 +152,7 @@ class OllamaLanguageModel(language_model.LanguageModel):
               f'Use the following json template: {json.dumps(template)}.'
           ),
           think=False,
-          options={'stop': (), 'temperature': temperature},
+          options=options,
           format='json',
           keep_alive='10m',
       )
@@ -155,6 +173,13 @@ class OllamaLanguageModel(language_model.LanguageModel):
         sample = sample_or_none
         if isinstance(sample, str) and sample:
           sample = sample.strip()
+
+      if not isinstance(sample, str):
+        # Some models (e.g. deepseek-r1) occasionally nest the choice in a
+        # non-string JSON value (a dict or list) instead of returning it as
+        # a plain string. extract_choice_response only handles strings, so
+        # treat this as a failed attempt and retry rather than crash.
+        continue
 
       answer = sampling.extract_choice_response(sample)
       try:

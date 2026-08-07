@@ -38,6 +38,7 @@ import dataclasses
 import json
 import logging
 import os
+import random
 
 from concordia.contrib.language_models import language_model_setup  # pyrefly: ignore[missing-import]
 from examples.norm_drift.metrics import norm_drift_metrics
@@ -98,11 +99,20 @@ def main() -> None:
 
   logging.basicConfig(level=logging.INFO)
 
+  # Concordia's engine uses Python's global `random` module directly in some
+  # components (e.g. next_acting.py's random.choice for speaker selection),
+  # not just the language model's own sampling. Seeding it here is necessary
+  # for run-to-run reproducibility on top of the model-level seed passed to
+  # language_model_setup below.
+  random.seed(args.seed)
+  np.random.seed(args.seed)
+
   model = language_model_setup(
       api_type=args.api_type,
       model_name=args.model_name,
       api_key=args.api_key,
       disable_language_model=args.disable_language_model,
+      seed=args.seed,
   )
 
   if args.use_dummy_embedder or args.disable_language_model:
