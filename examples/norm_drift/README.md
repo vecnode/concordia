@@ -46,7 +46,35 @@ For the paper, the intended comparison is:
    `cycles_to_recovery` and final `verdict` (`stable` / `drifted` /
    `no_recovery`) between shock types.
 3. Repeat each condition across multiple seeds/models to report recovery
-   time as a distribution, not a single run's point estimate.
+   time and collapse rate as **distributions**, not single-run point
+   estimates. Multi-agent LLM social simulations are inherently stochastic
+   (see the seeding caveat below) — treat each seed as an independent
+   rollout, not a controlled replicate, consistent with prior work in this
+   space (Piatti et al., 2024).
+
+### Cycle budget: give Phase B enough runway
+
+Empirically, per-cycle Gini stabilizes within 2-3 cycles, so a long
+pre-perturbation baseline buys little. What matters is Phase B having
+enough cycles for drift (or its absence) to actually show up — a run that
+terminates 1 cycle after the perturbation cannot distinguish "recovered"
+from "ran out of time." `analysis.py` flags this automatically
+(`verdict_meaningful = n_post_perturbation_cycles >= 3`); a sweep where
+most runs are flagged NOT MEANINGFUL needs a larger `--num_cycles` or
+smaller `--perturbation_round`, not a different perturbation type. The
+defaults (`num_cycles=16`, `perturbation_round=4`) reflect this: a
+3-cycle baseline, 12 cycles of Phase B runway.
+
+### Reproducibility: seeded, not bit-reproducible
+
+`--seed` is passed to both the language model (via `language_model_setup`)
+and Python's global `random` module (used by Concordia's `next_acting.py`
+for speaker selection). This removes two real, previously-silent sources
+of nondeterminism, but does **not** make a full run bit-for-bit
+reproducible: Concordia's engine executes concurrent agent actions via a
+`ThreadPoolExecutor`, and thread completion order affects shared state in
+ways no seed controls. Report `--seed` values as run labels for an
+independent stochastic sample, not as guaranteeing a replayable trajectory.
 
 ## Known limitation: phase boundary, not a continuous run
 
@@ -98,19 +126,32 @@ python -m examples.norm_drift.run \
   --perturbation_type=newcomer
 ```
 
+### Using Ollama (local)
+
+```bash
+pip install ollama
+ollama pull llama3.2:3b
+
+python -m examples.norm_drift.run \
+  --api_type=ollama \
+  --model_name=llama3.2:3b \
+  --perturbation_type=rule_change \
+  --use_dummy_embedder
+```
+
 ## Key parameters
 
 | Flag                       | Default            | Description                                              |
 | --------------------------- | ------------------- | ---------------------------------------------------------- |
-| `--num_cycles`              | `12`                | Total cycles across both phases.                          |
-| `--perturbation_round`      | `6`                 | Cycle (1-indexed) the perturbation is introduced at.       |
+| `--num_cycles`              | `16`                | Total cycles across both phases.                          |
+| `--perturbation_round`      | `4`                 | Cycle (1-indexed) the perturbation is introduced at.       |
 | `--perturbation_type`       | `rule_change`       | `rule_change`, `newcomer`, or `none` (control).            |
 | `--api_type`                | `openai`            | Language model provider.                                   |
 | `--model_name`              | `gpt-4o`            | Language model name.                                        |
 | `--disable_language_model`  | `false`             | Use a mock model for testing.                               |
 | `--use_dummy_embedder`      | `false`             | Use a zero-vector embedder instead of sentence-transformers.|
 | `--output_dir`              | `/tmp/norm_drift_results` | Directory for HTML logs and the metrics JSON summary. |
-| `--seed`                    | `42`                | Random seed for reproducibility.                            |
+| `--seed`                    | `42`                | Fixed generation seed (see reproducibility note above).     |
 
 ## Output
 
@@ -119,14 +160,56 @@ Written to `--output_dir`:
 - `village_commons_phase_a.html` / `village_commons_phase_b.html` — full
   simulation transcripts for each phase.
 - `norm_drift_metrics.json` — per-cycle Gini series, trailing convergence
-  variance, and the perturbation-recovery result.
+  variance, `n_post_perturbation_cycles`/`verdict_meaningful`, and the
+  perturbation-recovery result.
+
+## Multi-seed sweeps
+
+For a proper comparison you need many independent rollouts per condition,
+not one run per perturbation type. `sweep.py` runs a full
+(`perturbation_types` × `seeds`) grid, `--max_parallel` runs concurrently
+as separate OS processes (real parallelism, verified against the model
+backend actually serving concurrent requests — check this against your own
+Ollama server before assuming a speedup), and aggregates automatically:
+
+```bash
+python -m examples.norm_drift.sweep \
+  --sweep_dir=/tmp/norm_drift_sweep \
+  --perturbation_types=rule_change,newcomer \
+  --seeds=1,2,3,4,5 \
+  --api_type=ollama --model_name=llama3.2:3b \
+  --num_cycles=16 --perturbation_round=4 \
+  --max_parallel=2 --use_dummy_embedder
+```
+
+This writes `sweep_summary.csv` (one row per run),
+`sweep_gini_trajectories.csv` (long format, one row per run-cycle, for
+plotting), and `sweep_aggregate.json` (full detail) to `--sweep_dir`.
+`analysis.py` can also be run standalone against an existing sweep
+directory to regenerate these without re-running anything:
+
+```bash
+python -m examples.norm_drift.analysis /tmp/norm_drift_sweep
+```
+
+To render the Gini-trajectory figure (requires matplotlib, kept as a
+separate optional dependency from the core aggregation logic):
+
+```bash
+python -m examples.norm_drift.plotting /tmp/norm_drift_sweep \
+  --model_name=llama3.2:3b
+```
 
 ## File structure
 
 ```
 norm_drift/
 ├── README.md                        # This file
-├── run.py                           # Main entry point
+├── run.py                           # Main entry point (single run)
+├── sweep.py                         # Multi-seed x condition sweep runner
+├── analysis.py                      # Sweep aggregation (CSV/JSON), no LLM dep
+├── analysis_test.py                 # Tests for analysis.py, synthetic fixtures
+├── plotting.py                      # Gini-trajectory figure (matplotlib)
 ├── __init__.py
 ├── personas/
 │   ├── __init__.py

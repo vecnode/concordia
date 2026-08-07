@@ -30,6 +30,15 @@ across the phase boundary). This is a genuine phase boundary, not a fully
 continuous simulation — see the README for why this is an acceptable
 approximation for the paper's purposes, and what a continuous-engine version
 would require.
+
+Default cycle budget rationale: empirically, per-cycle Gini stabilizes
+within 2-3 cycles, so a 3-cycle baseline (DEFAULT_PERTURBATION_ROUND=4) is
+enough to establish it. The bulk of the cycle budget
+(DEFAULT_NUM_CYCLES - DEFAULT_PERTURBATION_ROUND) should go to Phase B --
+a short baseline with a short post-perturbation window produces recovery
+verdicts based on only 1-2 observed cycles after the shock, which is not
+enough to distinguish "recovered" from "the run ended before drift had a
+chance to show up" (see analysis.MIN_POST_PERTURBATION_CYCLES_FOR_MEANING).
 """
 
 import dataclasses
@@ -42,8 +51,8 @@ from examples.resource_dilemma.scenarios import pasture
 from concordia.prefabs.simulation import generic as simulation
 from concordia.environment.engines import simultaneous
 
-DEFAULT_NUM_CYCLES = 12
-DEFAULT_PERTURBATION_ROUND = 6
+DEFAULT_NUM_CYCLES = 16
+DEFAULT_PERTURBATION_ROUND = 4
 DEFAULT_CAPACITY = 100
 
 PERTURBATION_TYPES = ('rule_change', 'newcomer', 'none')

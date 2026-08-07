@@ -41,6 +41,7 @@ import os
 import random
 
 from concordia.contrib.language_models import language_model_setup  # pyrefly: ignore[missing-import]
+from examples.norm_drift import analysis
 from examples.norm_drift.metrics import norm_drift_metrics
 from examples.norm_drift.scenarios import village_commons
 import numpy as np
@@ -165,6 +166,14 @@ def main() -> None:
         ' model does not produce parseable "GRAZE X" responses).'
     )
 
+  n_post_perturbation_cycles = sum(
+      1 for c in gini_series if c >= args.perturbation_round
+  )
+  verdict_meaningful = (
+      n_post_perturbation_cycles
+      >= analysis.MIN_POST_PERTURBATION_CYCLES_FOR_MEANING
+  )
+
   print('\n=== Norm-Drift Metrics Summary ===')
   print(f'Per-cycle Gini: {json.dumps(gini_series, indent=2)}')
   print(f'Trailing convergence variance: {variance}')
@@ -176,6 +185,16 @@ def main() -> None:
         f' baseline_gini={recovery.baseline_gini:.4f},'
         f' tolerance_band={recovery.tolerance_band:.4f}'
     )
+    if not verdict_meaningful:
+      print(
+          f'WARNING: only {n_post_perturbation_cycles} post-perturbation'
+          f' cycle(s) observed (< '
+          f'{analysis.MIN_POST_PERTURBATION_CYCLES_FOR_MEANING} threshold).'
+          ' This recovery verdict reflects the run ending shortly after the'
+          ' perturbation, not necessarily whether the population would have'
+          ' recovered or drifted given more time -- treat it as'
+          ' inconclusive, not as evidence either way.'
+      )
 
   summary_path = os.path.join(args.output_dir, 'norm_drift_metrics.json')
   with open(summary_path, 'w', encoding='utf-8') as f:
@@ -185,6 +204,8 @@ def main() -> None:
             'perturbation_type': run_result['perturbation_type'],
             'gini_series': gini_series,
             'convergence_variance': variance,
+            'n_post_perturbation_cycles': n_post_perturbation_cycles,
+            'verdict_meaningful': verdict_meaningful,
             'recovery': (
                 dataclasses.asdict(recovery) if recovery is not None else None
             ),
