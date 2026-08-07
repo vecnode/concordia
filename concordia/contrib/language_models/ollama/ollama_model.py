@@ -90,6 +90,7 @@ class OllamaLanguageModel(language_model.LanguageModel):
     response = self._client.generate(
         model=self._model_name,
         prompt=prompt_with_system_message,
+        think=False,
         options={
             'stop': terminators,
             'temperature': temperature,
@@ -132,6 +133,7 @@ class OllamaLanguageModel(language_model.LanguageModel):
               f'{prompt_with_system_message}.\n'
               f'Use the following json template: {json.dumps(template)}.'
           ),
+          think=False,
           options={'stop': (), 'temperature': temperature},
           format='json',
           keep_alive='10m',
