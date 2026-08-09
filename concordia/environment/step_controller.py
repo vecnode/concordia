@@ -67,6 +67,7 @@ class StepController:
     self._running = not start_paused
     self._step_requested = False
     self._stop_requested = False
+    self._forced_game_master: str | None = None
 
   @property
   def is_running(self) -> bool:
@@ -116,6 +117,29 @@ class StepController:
     """Check if a stop has been requested."""
     with self._lock:
       return self._stop_requested
+
+  def force_next_game_master(self, name: str) -> None:
+    """Overrides the next `next_game_master` decision with `name`.
+
+    Consumed exactly once, by the next call to `pop_forced_game_master`
+    (a multi-Game-Master engine's `next_game_master` calls this itself, if
+    given this controller) -- so it applies to the very next handoff
+    decision only, not every one from here on. Has no effect on a
+    single-Game-Master run, since there's nothing to hand off to.
+    """
+    with self._lock:
+      self._forced_game_master = name
+
+  def pop_forced_game_master(self) -> str | None:
+    """Returns and clears any pending `force_next_game_master` value.
+
+    `None` if none is pending -- the normal case, meaning the next
+    `next_game_master` decision is made the usual way (the current Game
+    Master's own choice).
+    """
+    with self._lock:
+      forced, self._forced_game_master = self._forced_game_master, None
+      return forced
 
   def wait_for_step_permission(self) -> bool:
     """Block until permission is granted to execute the next step.
