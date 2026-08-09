@@ -188,11 +188,29 @@ class Sequential(engine_lib.Engine):
           f'Terminate? {should_terminate_string}', _PRINT_COLOR))
     return should_terminate_string == entity_lib.BINARY_OPTIONS['affirmative']
 
-  def next_game_master(self,
-                       game_master: entity_lib.Entity,
-                       game_masters: Sequence[entity_lib.Entity],
-                       verbose: bool = False) -> entity_lib.Entity:
-    """Select which game master to use for the next step."""
+  def next_game_master(
+      self,
+      game_master: entity_lib.Entity,
+      game_masters: Sequence[entity_lib.Entity],
+      verbose: bool = False,
+      step_controller: step_controller_lib.StepController | None = None,
+  ) -> entity_lib.Entity:
+    """Select which game master to use for the next step.
+
+    Args:
+      game_master: The currently active game master.
+      game_masters: Every game master available to hand off to.
+      verbose: Whether to print the decision.
+      step_controller: If given and it has a pending
+        `force_next_game_master` value (see that method), that value wins
+        this decision instead of asking `game_master` -- consumed exactly
+        once, so it applies to this call only.
+    """
+    forced_name = (
+        step_controller.pop_forced_game_master()
+        if step_controller is not None
+        else None
+    )
     if len(game_masters) == 1:
       if verbose:
         print(termcolor.colored(
@@ -203,6 +221,16 @@ class Sequential(engine_lib.Engine):
     game_masters_by_name = {
         game_master_.name: game_master_ for game_master_ in game_masters
     }
+    if forced_name is not None:
+      if forced_name not in game_masters_by_name:
+        raise ValueError(
+            f'Forced game master "{forced_name}" not found in:'
+            f' {game_masters_by_name.keys()}'
+        )
+      if verbose:
+        print(termcolor.colored(
+            f'Game master (forced): {forced_name}', _PRINT_COLOR))
+      return game_masters_by_name[forced_name]
     next_game_master_name = game_master.act(
         action_spec=entity_lib.ActionSpec(
             call_to_action=self._call_to_next_game_master,
@@ -253,7 +281,9 @@ class Sequential(engine_lib.Engine):
         assert hasattr(game_master, 'get_last_log')  # Assertion for pytype
         log_entry['terminate'] = game_master.get_last_log()
 
-      game_master = self.next_game_master(game_master, game_masters, verbose)
+      game_master = self.next_game_master(
+          game_master, game_masters, verbose, step_controller=step_controller
+      )
       if log is not None and hasattr(game_master, 'get_last_log'):
         assert hasattr(game_master, 'get_last_log')  # Assertion for pytype
         log_entry['next_game_master'] = game_master.get_last_log()
