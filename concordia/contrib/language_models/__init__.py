@@ -24,6 +24,7 @@ from concordia.language_model import no_language_model
 
 _REGISTRY = types.MappingProxyType({
     'amazon_bedrock': 'amazon.amazon_bedrock_model.AmazonBedrockLanguageModel',
+    'anthropic': 'anthropic.anthropic_model.AnthropicLanguageModel',
     'gemini': 'google.gemini_model.GeminiModel',
     'gemini_vision': 'google.gemini_model_vision.GeminiModelVision',
     'google_cloud_custom_model': 'google.google_cloud_custom_model.VertexAI',
@@ -67,6 +68,7 @@ def language_model_setup(
     device: str | None = None,
     disable_language_model: bool = False,
     seed: int | None = None,
+    timeout: float | None = None,
 ) -> language_model.LanguageModel:
   """Get the wrapped language model.
 
@@ -82,6 +84,12 @@ def language_model_setup(
       model's constructor only if that backend's __init__ accepts a `seed`
       argument (checked via introspection, so this is a no-op for backends
       that don't support it rather than a crash).
+    timeout: Per-request timeout in seconds, passed to the model's
+      constructor only if that backend's __init__ accepts a `timeout`
+      argument (same introspection-based opt-in as `seed`). Bounds
+      worst-case wall time per call for backends that support it (e.g.
+      OllamaLanguageModel) instead of leaving a stalled server call
+      unbounded.
 
   Returns:
     The wrapped language model.
@@ -100,6 +108,9 @@ def language_model_setup(
   except KeyError as error:
     raise ValueError(f'Unrecognized api_type: {api_type}') from error
   cls = _import_model(model_path)
-  if seed is not None and 'seed' in inspect.signature(cls.__init__).parameters:
+  init_params = inspect.signature(cls.__init__).parameters
+  if seed is not None and 'seed' in init_params:
     kwargs['seed'] = seed
+  if timeout is not None and 'timeout' in init_params:
+    kwargs['timeout'] = timeout
   return cls(**kwargs)

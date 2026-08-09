@@ -87,6 +87,10 @@ setuptools.setup(
             # Used in contrib.language_models.amazon
             'boto3',
         ],
+        'anthropic': [
+            # Used in concordia.contrib.language_models.anthropic
+            'anthropic',
+        ],
         'dev': [
             # Used in development
             'build',

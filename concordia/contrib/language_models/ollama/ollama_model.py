@@ -50,6 +50,7 @@ class OllamaLanguageModel(language_model.LanguageModel):
       measurements: measurements_lib.Measurements | None = None,
       channel: str = language_model.DEFAULT_STATS_CHANNEL,
       seed: int | None = None,
+      timeout: float | None = None,
   ) -> None:
     """Initializes the instance.
 
@@ -66,9 +67,18 @@ class OllamaLanguageModel(language_model.LanguageModel):
           currently passes a per-call seed to sample_text/sample_choice), so
           it makes an entire simulation run reproducible given an identical
           sequence of prompts, not each individual call independently.
+        timeout: Per-request timeout in seconds, forwarded to the underlying
+          HTTP client. Without this, a request has no deadline: if the
+          Ollama server itself stalls (e.g. under memory pressure from a
+          large model), the call blocks indefinitely with no way to recover
+          short of killing the process. None preserves the previous
+          (unbounded) behavior.
     """
     self._model_name = model_name
-    self._client = ollama.Client()
+    self._client = (
+        ollama.Client(timeout=timeout) if timeout is not None
+        else ollama.Client()
+    )
     self._system_message = system_message
     self._terminators = []
     self._seed = seed
