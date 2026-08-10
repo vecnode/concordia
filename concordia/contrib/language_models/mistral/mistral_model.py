@@ -284,7 +284,13 @@ class MistralLanguageModel(language_model.LanguageModel):
             temperature=temperature,
             seed=seed,
         )
-      answer = sampling.extract_choice_response(sample)
+      # Prefer an exact match against the valid options first --
+      # extract_choice_response only recovers a parenthesized single
+      # character ("(a)"), so a bare/unparenthesized answer ("a") would
+      # otherwise be missed even though it's already unambiguous.
+      answer = sample if sample in responses else sampling.extract_choice_response(
+          sample
+      )
       try:
         idx = responses.index(answer)
       except ValueError:

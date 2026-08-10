@@ -159,6 +159,15 @@ class OllamaLanguageModel(language_model.LanguageModel):
           model=self._model_name,
           prompt=(
               f'{prompt_with_system_message}.\n'
+              # `prompt` already renders the options as e.g. "(a) Danny\n(b)
+              # Sage\n...\nAnswer: (", a continuation-style cue for the
+              # letter key -- but forcing JSON output here breaks that
+              # continuation framing, so without this explicit instruction
+              # the model tends to answer with an option's full text (e.g.
+              # "Danny") instead of its key, which then can never match
+              # `responses` (always the short keys, e.g. ('a', 'b')).
+              'Respond with exactly one of the following options: '
+              f'{", ".join(responses)}.\n'
               f'Use the following json template: {json.dumps(template)}.'
           ),
           think=False,
@@ -191,7 +200,15 @@ class OllamaLanguageModel(language_model.LanguageModel):
         # treat this as a failed attempt and retry rather than crash.
         continue
 
-      answer = sampling.extract_choice_response(sample)
+      # Prefer an exact match against the valid options first -- `responses`
+      # is normally the short option keys interactive_document.py's
+      # multiple_choice_question assigns (e.g. ('a', 'b')), which the model
+      # sometimes returns bare/unparenthesized ("a" rather than "(a)"), a
+      # case extract_choice_response's parenthesized-only fallback below
+      # would otherwise miss.
+      answer = sample if sample in responses else sampling.extract_choice_response(
+          sample
+      )
       try:
         idx = responses.index(answer)
       except ValueError:

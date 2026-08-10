@@ -116,7 +116,16 @@ class LangchainOllamaLanguageModel(language_model.LanguageModel):
       *,
       seed: int | None = None,
   ) -> tuple[int, str, dict[str, float]]:
-    prompt_with_system_message = f'{self._system_message}\n\n{prompt}'
+    # Restate the valid options explicitly -- the underlying `prompt`
+    # already renders them as "(a) ...\n(b) ...\n...\nAnswer: (", but that
+    # continuation cue alone isn't always enough for local models to stick
+    # to just the key.
+    prompt_with_system_message = (
+        f'{self._system_message}\n\n{prompt}'
+        '\nRespond EXACTLY with one of the following strings:\n'
+        + '\n'.join(responses)
+        + '.'
+    )
     sample = ''
     answer = ''
     for attempts in range(_MAX_MULTIPLE_CHOICE_ATTEMPTS):
@@ -130,7 +139,13 @@ class LangchainOllamaLanguageModel(language_model.LanguageModel):
           temperature=temperature,
           seed=seed,
       )
-      answer = sampling.extract_choice_response(sample)
+      # Prefer an exact match against the valid options first --
+      # extract_choice_response only recovers a parenthesized single
+      # character ("(a)"), so a bare/unparenthesized answer ("a") would
+      # otherwise be missed even though it's already unambiguous.
+      answer = sample if sample in responses else sampling.extract_choice_response(
+          sample
+      )
       try:
         idx = responses.index(answer)
       except ValueError:

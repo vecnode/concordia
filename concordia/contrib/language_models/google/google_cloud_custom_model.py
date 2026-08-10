@@ -199,7 +199,13 @@ class VertexAI(language_model.LanguageModel):
 
       # clean up the sample from newlines and spaces
       sample = sample.replace("\n", "").replace(" ", "")
-      answer = sampling.extract_choice_response(sample)
+      # Prefer an exact match against the valid options first --
+      # extract_choice_response only recovers a parenthesized single
+      # character ("(a)"), so a bare/unparenthesized answer ("a") would
+      # otherwise be missed even though it's already unambiguous.
+      answer = sample if sample in responses else sampling.extract_choice_response(
+          sample
+      )
       try:
         idx = responses.index(answer)
         if self._measurements is not None:
