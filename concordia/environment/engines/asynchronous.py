@@ -236,7 +236,8 @@ class Asynchronous(engine_lib.Engine):
       )
       print(
           termcolor.colored(
-              f'The suggested action or event to resolve was: {display_event}',
+              f'[GAME MASTER:{game_master.name}] The suggested action or'
+              f' event to resolve was: {display_event}',
               _PRINT_COLOR,
           )
       )
@@ -250,7 +251,9 @@ class Asynchronous(engine_lib.Engine):
     game_master.observe(observation=f'{EVENT_TAG} {result}')
     if verbose:
       print(
-          termcolor.colored(f'The resolved event was: {result}', _PRINT_COLOR)
+          termcolor.colored(
+              f'[GAME MASTER:{game_master.name}] The resolved event was:'
+              f' {result}', _PRINT_COLOR)
       )
 
   def terminate(
@@ -266,7 +269,8 @@ class Asynchronous(engine_lib.Engine):
     if verbose:
       print(
           termcolor.colored(
-              f'Terminate? {should_terminate_string}', _PRINT_COLOR
+              f'[GAME MASTER:{game_master.name}] Terminate?'
+              f' {should_terminate_string}', _PRINT_COLOR
           )
       )
     return should_terminate_string == entity_lib.BINARY_OPTIONS['affirmative']
@@ -292,7 +296,8 @@ class Asynchronous(engine_lib.Engine):
     if verbose:
       print(
           termcolor.colored(
-              f'Game master: {next_game_master_name}', _PRINT_COLOR
+              f'[GAME MASTER:{game_master.name}] Game master:'
+              f' {next_game_master_name}', _PRINT_COLOR
           )
       )
     if next_game_master_name not in game_masters_by_name:
@@ -395,7 +400,7 @@ class Asynchronous(engine_lib.Engine):
           if verbose:
             print(
                 termcolor.colored(
-                    f'Entity {entity.name} observed: {observation}',
+                    f'[AGENT:{entity.name}] observed: {observation}',
                     _PRINT_COLOR,
                 )
             )
@@ -404,8 +409,9 @@ class Asynchronous(engine_lib.Engine):
         if verbose:
           print(
               termcolor.colored(
-                  f'Entity {entity.name} is next to act. They must respond'
-                  f' in the format: "{action_spec}".',
+                  f'[GAME MASTER:{game_master.name}] {entity.name} is next'
+                  f' to act. They must respond in the format:'
+                  f' "{action_spec}".',
                   _PRINT_COLOR,
               )
           )
@@ -423,7 +429,7 @@ class Asynchronous(engine_lib.Engine):
           )
           print(
               termcolor.colored(
-                  f'Entity {entity.name} chose action: {display_action}',
+                  f'[AGENT:{entity.name}] chose action: {display_action}',
                   _PRINT_COLOR,
               )
           )
@@ -512,7 +518,8 @@ class Asynchronous(engine_lib.Engine):
         if verbose:
           print(
               termcolor.colored(
-                  '\nSkipping the action phase for the current time step.\n',
+                  '\n[SYSTEM] Skipping the action phase for the current'
+                  ' time step.\n',
                   _PRINT_COLOR,
               )
           )
@@ -528,7 +535,7 @@ class Asynchronous(engine_lib.Engine):
             if verbose:
               print(
                   termcolor.colored(
-                      f'Entity {entity.name} observed: {observation}',
+                      f'[AGENT:{entity.name}] observed: {observation}',
                       _PRINT_COLOR,
                   )
               )

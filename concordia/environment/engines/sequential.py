@@ -156,7 +156,8 @@ class Sequential(engine_lib.Engine):
       )
       print(
           termcolor.colored(
-              f'The suggested action or event to resolve was: {display_event}',
+              f'[GAME MASTER:{game_master.name}] The suggested action or'
+              f' event to resolve was: {display_event}',
               _PRINT_COLOR,
           )
       )
@@ -170,7 +171,8 @@ class Sequential(engine_lib.Engine):
     game_master.observe(observation=f'{EVENT_TAG} {result}')
     if verbose:
       print(termcolor.colored(
-          f'The resolved event was: {result}', _PRINT_COLOR))
+          f'[GAME MASTER:{game_master.name}] The resolved event was:'
+          f' {result}', _PRINT_COLOR))
 
   def terminate(self,
                 game_master: entity_lib.Entity,
@@ -185,7 +187,8 @@ class Sequential(engine_lib.Engine):
     )
     if verbose:
       print(termcolor.colored(
-          f'Terminate? {should_terminate_string}', _PRINT_COLOR))
+          f'[GAME MASTER:{game_master.name}] Terminate?'
+          f' {should_terminate_string}', _PRINT_COLOR))
     return should_terminate_string == entity_lib.BINARY_OPTIONS['affirmative']
 
   def next_game_master(
@@ -214,8 +217,9 @@ class Sequential(engine_lib.Engine):
     if len(game_masters) == 1:
       if verbose:
         print(termcolor.colored(
-            (f'Only one game master available ({game_masters[0].name}), '
-             'skipping the call to `next_game_master`.'),
+            (f'[SYSTEM] Only one game master available'
+             f' ({game_masters[0].name}), skipping the call to'
+             ' `next_game_master`.'),
             _PRINT_COLOR))
       return game_masters[0]
     game_masters_by_name = {
@@ -229,7 +233,7 @@ class Sequential(engine_lib.Engine):
         )
       if verbose:
         print(termcolor.colored(
-            f'Game master (forced): {forced_name}', _PRINT_COLOR))
+            f'[SYSTEM] Game master (forced): {forced_name}', _PRINT_COLOR))
       return game_masters_by_name[forced_name]
     next_game_master_name = game_master.act(
         action_spec=entity_lib.ActionSpec(
@@ -240,7 +244,8 @@ class Sequential(engine_lib.Engine):
     )
     if verbose:
       print(termcolor.colored(
-          f'Game master: {next_game_master_name}', _PRINT_COLOR))
+          f'[GAME MASTER:{game_master.name}] Game master:'
+          f' {next_game_master_name}', _PRINT_COLOR))
     if next_game_master_name not in game_masters_by_name:
       raise ValueError(
           f'Selected game master "{next_game_master_name}" not found in:'
@@ -300,7 +305,7 @@ class Sequential(engine_lib.Engine):
           if verbose:
             print(
                 termcolor.colored(
-                    f'Entity {entity.name} observed: {observation}',
+                    f'[AGENT:{entity.name}] observed: {observation}',
                     _PRINT_COLOR,
                 )
             )
@@ -322,7 +327,8 @@ class Sequential(engine_lib.Engine):
         # current step and continue to the next step.
         if verbose:
           print(termcolor.colored(
-              '\nSkipping the action phase for the current time step.\n'))
+              '\n[SYSTEM] Skipping the action phase for the current time'
+              ' step.\n'))
         if checkpoint_callback is not None:
           logging.debug('Calling checkpoint callback at step %s', steps)
           checkpoint_callback(steps)
@@ -342,8 +348,9 @@ class Sequential(engine_lib.Engine):
 
       if verbose:
         print(termcolor.colored(
-            f'Entity {next_entity.name} is next to act. They must respond '
-            f' in the format: "{entity_spec_to_use}".', _PRINT_COLOR))
+            f'[GAME MASTER:{game_master.name}] {next_entity.name} is next to'
+            f' act. They must respond in the format:'
+            f' "{entity_spec_to_use}".', _PRINT_COLOR))
       raw_action = next_entity.act(entity_spec_to_use)
       if raw_action.startswith(f'{next_entity.name}:'):
         action = raw_action
@@ -353,7 +360,7 @@ class Sequential(engine_lib.Engine):
         display_action = _BASE64_TRUNCATE_PATTERN.sub(r'\1[IMAGE DATA]', action)
         print(
             termcolor.colored(
-                f'Entity {next_entity.name} chose action: {display_action}',
+                f'[AGENT:{next_entity.name}] chose action: {display_action}',
                 _PRINT_COLOR,
             )
         )
