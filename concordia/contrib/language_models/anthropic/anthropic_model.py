@@ -23,6 +23,24 @@ from concordia.language_model import language_model
 from concordia.utils import measurements as measurements_lib
 
 
+def _extract_token_usage(response) -> dict[str, int]:
+  """Real input/output token counts from a Messages API response, keyed to
+  match the other providers' `prompt_tokens`/`completion_tokens`/
+  `total_tokens` (Anthropic's own `usage.input_tokens`/`output_tokens`
+  naming otherwise wouldn't line up with them)."""
+  usage = getattr(response, 'usage', None)
+  if usage is None:
+    return {}
+  result = {}
+  if usage.input_tokens is not None:
+    result['prompt_tokens'] = usage.input_tokens
+  if usage.output_tokens is not None:
+    result['completion_tokens'] = usage.output_tokens
+  if usage.input_tokens is not None and usage.output_tokens is not None:
+    result['total_tokens'] = usage.input_tokens + usage.output_tokens
+  return result
+
+
 _MAX_MULTIPLE_CHOICE_ATTEMPTS = 20
 
 # Anthropic's Messages API takes the system prompt as a top-level `system`
@@ -99,7 +117,7 @@ class AnthropicLanguageModel(language_model.LanguageModel):
     if self._measurements is not None:
       self._measurements.publish_datum(
           self._channel,
-          {'raw_text_length': len(text)},
+          {'raw_text_length': len(text), **_extract_token_usage(response)},
       )
 
     return text

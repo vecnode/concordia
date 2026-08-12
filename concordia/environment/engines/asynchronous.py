@@ -38,7 +38,7 @@ from concordia.typing import entity as entity_lib
 from concordia.utils import async_log_collector as collector_lib
 from concordia.utils import async_measurements as async_measurements_lib
 from concordia.utils import concurrency
-import termcolor
+from concordia.utils import console_color
 
 
 DEFAULT_CALL_TO_MAKE_OBSERVATION = (
@@ -235,7 +235,7 @@ class Asynchronous(engine_lib.Engine):
           r'\1[IMAGE DATA]', putative_event
       )
       print(
-          termcolor.colored(
+          console_color.colored(
               f'[GAME MASTER:{game_master.name}] The suggested action or'
               f' event to resolve was: {display_event}',
               _PRINT_COLOR,
@@ -251,7 +251,7 @@ class Asynchronous(engine_lib.Engine):
     game_master.observe(observation=f'{EVENT_TAG} {result}')
     if verbose:
       print(
-          termcolor.colored(
+          console_color.colored(
               f'[GAME MASTER:{game_master.name}] The resolved event was:'
               f' {result}', _PRINT_COLOR)
       )
@@ -268,7 +268,7 @@ class Asynchronous(engine_lib.Engine):
     )
     if verbose:
       print(
-          termcolor.colored(
+          console_color.colored(
               f'[GAME MASTER:{game_master.name}] Terminate?'
               f' {should_terminate_string}', _PRINT_COLOR
           )
@@ -295,7 +295,7 @@ class Asynchronous(engine_lib.Engine):
     )
     if verbose:
       print(
-          termcolor.colored(
+          console_color.colored(
               f'[GAME MASTER:{game_master.name}] Game master:'
               f' {next_game_master_name}', _PRINT_COLOR
           )
@@ -399,7 +399,7 @@ class Asynchronous(engine_lib.Engine):
         if observation and observation.strip():
           if verbose:
             print(
-                termcolor.colored(
+                console_color.colored(
                     f'[AGENT:{entity.name}] observed: {observation}',
                     _PRINT_COLOR,
                 )
@@ -408,7 +408,7 @@ class Asynchronous(engine_lib.Engine):
 
         if verbose:
           print(
-              termcolor.colored(
+              console_color.colored(
                   f'[GAME MASTER:{game_master.name}] {entity.name} is next'
                   f' to act. They must respond in the format:'
                   f' "{action_spec}".',
@@ -428,7 +428,7 @@ class Asynchronous(engine_lib.Engine):
               r'\1[IMAGE DATA]', action
           )
           print(
-              termcolor.colored(
+              console_color.colored(
                   f'[AGENT:{entity.name}] chose action: {display_action}',
                   _PRINT_COLOR,
               )
@@ -517,7 +517,7 @@ class Asynchronous(engine_lib.Engine):
       if action_spec.output_type == entity_lib.OutputType.SKIP_THIS_STEP:
         if verbose:
           print(
-              termcolor.colored(
+              console_color.colored(
                   '\n[SYSTEM] Skipping the action phase for the current'
                   ' time step.\n',
                   _PRINT_COLOR,
@@ -534,7 +534,7 @@ class Asynchronous(engine_lib.Engine):
           if observation and observation.strip():
             if verbose:
               print(
-                  termcolor.colored(
+                  console_color.colored(
                       f'[AGENT:{entity.name}] observed: {observation}',
                       _PRINT_COLOR,
                   )

@@ -34,7 +34,7 @@ from concordia.language_model import language_model
 from concordia.typing import entity as entity_lib
 from concordia.typing import entity_component
 from concordia.utils import concurrency
-import termcolor
+from concordia.utils import console_color
 
 
 PUTATIVE_EVENT_TAG = event_resolution_components.PUTATIVE_EVENT_TAG
@@ -621,7 +621,7 @@ If there are no significant events, return "No memories to extract."
 
     # --- PREPARATION: Gather context and plans (ROBUST VERSION) ---
     if self._verbose:
-      print(termcolor.colored("Starting simplified event resolution", "cyan"))
+      print(console_color.colored("Starting simplified event resolution", "cyan"))
 
     current_time_str = self.get_named_component_pre_act_value(
         self._generative_clock_key
@@ -645,7 +645,7 @@ If there are no significant events, return "No memories to extract."
     if not suggestions:
       if self._verbose:
         print(
-            termcolor.colored(
+            console_color.colored(
                 "No putative events found in memory. This might be an issue"
                 " with player agents saving their plans.",
                 "yellow",
@@ -655,7 +655,7 @@ If there are no significant events, return "No memories to extract."
 
     if self._verbose:
       print(
-          termcolor.colored(
+          console_color.colored(
               f"Found {len(suggestions)} putative events. Parsing them now...",
               "cyan",
           )
@@ -678,19 +678,19 @@ If there are no significant events, return "No memories to extract."
           latest_actions[found_player] = f"{found_player}'s plan: {action}"
           if self._verbose:
             print(
-                termcolor.colored(
+                console_color.colored(
                     f"Successfully parsed plan for {found_player}", "green"
                 )
             )
         except (ValueError, TypeError) as e:
           if self._verbose:
             print(
-                termcolor.colored(
+                console_color.colored(
                     f"Error parsing suggestion for {found_player}: {e}", "red"
                 )
             )
             print(
-                termcolor.colored(
+                console_color.colored(
                     f"Problematic suggestion: {suggestion}", "yellow"
                 )
             )
@@ -698,7 +698,7 @@ If there are no significant events, return "No memories to extract."
     if not latest_actions:
       if self._verbose:
         print(
-            termcolor.colored(
+            console_color.colored(
                 "CRITICAL: Found putative events but failed to parse any plans."
                 " Check player agent memory format and ensure the tag is"
                 " present.",
@@ -708,9 +708,9 @@ If there are no significant events, return "No memories to extract."
       return ""
 
     if self._verbose:
-      print(termcolor.colored("Player plans:", "cyan"))
+      print(console_color.colored("Player plans:", "cyan"))
       for player, plan in latest_actions.items():
-        print(termcolor.colored(f"  {player}: {plan}", "white"))
+        print(console_color.colored(f"  {player}: {plan}", "white"))
 
     component_states = "\n".join(
         [self._component_pre_act_display(key) for key in self._components]
@@ -718,7 +718,7 @@ If there are no significant events, return "No memories to extract."
 
     # --- STEP 1: GENERATE THE MASTER NARRATIVE (WITH RETRY LOGIC) ---
     if self._verbose:
-      print(termcolor.colored("STEP 1: Generating master narrative", "cyan"))
+      print(console_color.colored("STEP 1: Generating master narrative", "cyan"))
 
     min_words = max(400, self._time_period_minutes * 25)  # ~25 words per minute
 
@@ -852,8 +852,8 @@ By 9:13 AM, Alex was already helping another visitor find the restrooms, her mov
         initial_narrative_instructions, max_tokens=50000, terminators=[]
     )
     if self._verbose:
-      print(termcolor.colored("Initial narrative generated:", "blue"))
-      print(termcolor.colored(self._narrative, "blue"))
+      print(console_color.colored("Initial narrative generated:", "blue"))
+      print(console_color.colored(self._narrative, "blue"))
 
     # --- RETRY LOGIC FOR MASTER NARRATIVE ---
     max_narrative_retries = 2  # Limit retries to prevent infinite loops
@@ -871,7 +871,7 @@ By 9:13 AM, Alex was already helping another visitor find the restrooms, her mov
       if not missing_players and is_valid:
         if self._verbose:
           print(
-              termcolor.colored(
+              console_color.colored(
                   "Master narrative generated successfully on attempt"
                   f" {retry_attempt + 1}. All players included, quality checks"
                   " passed.",
@@ -890,7 +890,7 @@ By 9:13 AM, Alex was already helping another visitor find the restrooms, her mov
       if self._verbose:
         issues_str = "; ".join(all_issues)
         print(
-            termcolor.colored(
+            console_color.colored(
                 f"Retry {retry_attempt + 1}: Issues detected: {issues_str}",
                 "yellow",
             )
@@ -948,25 +948,25 @@ Provide the **FULL, REVISED, AND COMPLETE NARRATIVE** now, incorporating details
       )
       if self._verbose:
         print(
-            termcolor.colored(
+            console_color.colored(
                 f"Revised narrative generated on attempt {retry_attempt + 1}:",
                 "yellow",
             )
         )
-        print(termcolor.colored(self._narrative, "magenta"))
+        print(console_color.colored(self._narrative, "magenta"))
 
     # Final check after retries
     if self._identify_missing_players(self._narrative, self._player_names):
       if self._verbose:
         print(
-            termcolor.colored(
+            console_color.colored(
                 "WARNING: Even after retries, some players are still missing"
                 " from the master narrative.",
                 "red",
             )
         )
         print(
-            termcolor.colored(
+            console_color.colored(
                 "Remaining missing players:"
                 f" {', '.join(self._identify_missing_players(self._narrative, self._player_names))}",
                 "red",
@@ -974,12 +974,12 @@ Provide the **FULL, REVISED, AND COMPLETE NARRATIVE** now, incorporating details
         )
 
     if self._verbose:
-      print(termcolor.colored("Final Master narrative generated:", "green"))
-      print(termcolor.colored(self._narrative, "magenta"))
+      print(console_color.colored("Final Master narrative generated:", "green"))
+      print(console_color.colored(self._narrative, "magenta"))
 
     # --- STEP 2: GENERATE OBSERVATION FOR EACH PLAYER ---
     if self._verbose:
-      print(termcolor.colored("STEP 2: Generating player observations", "cyan"))
+      print(console_color.colored("STEP 2: Generating player observations", "cyan"))
 
     make_observation = self.get_entity().get_component(
         self._make_observation_component_key,
@@ -990,7 +990,7 @@ Provide the **FULL, REVISED, AND COMPLETE NARRATIVE** now, incorporating details
     def generate_player_observation(player_name: str) -> list[str]:
       """Generate observation for a single player (threadsafe)."""
       if self._verbose:
-        print(termcolor.colored(f"  - Generating for {player_name}", "cyan"))
+        print(console_color.colored(f"  - Generating for {player_name}", "cyan"))
 
       observation_prompt = interactive_document.InteractiveDocument(self._model)
 
@@ -1174,7 +1174,7 @@ Now, rewrite the observation for {player_name}, filtering out any information {p
           # Fallback to full observation if parsing yields no memories
           if self._verbose:
             print(
-                termcolor.colored(
+                console_color.colored(
                     f"    Could not parse memories for {player_name}, using"
                     " full observation.",
                     "yellow",
@@ -1184,7 +1184,7 @@ Now, rewrite the observation for {player_name}, filtering out any information {p
         else:
           if self._verbose:
             print(
-                termcolor.colored(
+                console_color.colored(
                     f"    Generated {len(memories)} memories for {player_name}",
                     "green",
                 )
@@ -1211,15 +1211,15 @@ Now, rewrite the observation for {player_name}, filtering out any information {p
     # Queue all observations
     for player_name, observation_list in observations_dict.items():
       if self._verbose:
-        print(termcolor.colored(f"Observations for {player_name}:", "yellow"))
+        print(console_color.colored(f"Observations for {player_name}:", "yellow"))
       for observation in observation_list:
         if self._verbose:
-          print(termcolor.colored(observation, "yellow"))
+          print(console_color.colored(observation, "yellow"))
         make_observation.add_to_queue(player_name, observation)
         memory.add(f"{player_name} observation: {observation}")
       if self._verbose:
         print(
-            termcolor.colored(
+            console_color.colored(
                 f"    Queued {len(observation_list)} entries for {player_name}",
                 "green",
             )
@@ -1227,7 +1227,7 @@ Now, rewrite the observation for {player_name}, filtering out any information {p
 
     # --- STEP 3: Recording narrative history for checkpoint/debugging ---
     if self._verbose:
-      print(termcolor.colored("STEP 3: Recording narrative history", "cyan"))
+      print(console_color.colored("STEP 3: Recording narrative history", "cyan"))
 
     if self._narrative_history_key:
       narrative_history = self.get_entity().get_component(
