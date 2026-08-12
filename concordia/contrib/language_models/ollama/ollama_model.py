@@ -16,12 +16,40 @@
 
 from collections.abc import Collection, Sequence
 import json
+import threading
 from typing import override
 
 from concordia.language_model import language_model
 from concordia.utils import measurements as measurements_lib
 from concordia.utils import sampling
 import ollama
+
+
+class GenerationCancelledError(RuntimeError):
+  """Raised by `OllamaLanguageModel.sample_text`/`sample_choice` when the
+  call's `cancel_event` (see `OllamaLanguageModel.__init__`) was set while
+  a generation was in flight.
+
+  This is what makes real mid-call cancellation possible for this
+  provider: without it, a blocking `ollama.Client().generate()` call has
+  no way to be interrupted once sent, since Python threads can't be
+  preempted from the outside and Concordia's `StepController`/`pause()`
+  is only ever checked between simulation steps, not inside a call
+  already in flight (see the "No true mid-run cancellation" limitation in
+  agora's ARCHITECTURE.md, which this addresses for the Ollama backend
+  specifically -- other providers would need the same streaming-plus-
+  cancellation-check treatment individually).
+  """
+
+
+def _field(obj, key: str, default=None):
+  """Reads `key` off `obj`, whether it's a plain dict or an attribute-style
+  object (e.g. ollama-python's `GenerateResponse`, a pydantic model) --
+  shared by `_extract_token_usage` and `OllamaLanguageModel._generate`
+  below so both tolerate either shape the same way.
+  """
+  get = obj.get if hasattr(obj, 'get') else lambda k, d=None: getattr(obj, k, d)
+  return get(key, default)
 
 
 def _extract_token_usage(response) -> dict[str, int]:
@@ -34,12 +62,8 @@ def _extract_token_usage(response) -> dict[str, int]:
   rather than defaulting missing ones to 0 and silently claiming a real
   count that isn't one.
   """
-  get = (
-      response.get if hasattr(response, 'get')
-      else lambda k, d=None: getattr(response, k, d)
-  )
-  prompt_tokens = get('prompt_eval_count')
-  completion_tokens = get('eval_count')
+  prompt_tokens = _field(response, 'prompt_eval_count')
+  completion_tokens = _field(response, 'eval_count')
   usage = {}
   if prompt_tokens is not None:
     usage['prompt_tokens'] = prompt_tokens
@@ -77,6 +101,7 @@ class OllamaLanguageModel(language_model.LanguageModel):
       channel: str = language_model.DEFAULT_STATS_CHANNEL,
       seed: int | None = None,
       timeout: float | None = None,
+      cancel_event: threading.Event | None = None,
   ) -> None:
     """Initializes the instance.
 
@@ -98,7 +123,20 @@ class OllamaLanguageModel(language_model.LanguageModel):
           Ollama server itself stalls (e.g. under memory pressure from a
           large model), the call blocks indefinitely with no way to recover
           short of killing the process. None preserves the previous
-          (unbounded) behavior.
+          (unbounded) behavior. `cancel_event` below is the complementary,
+          proactive mechanism -- this is a passive worst-case backstop.
+        cancel_event: Shared with whatever external code wants to interrupt
+          a call already in flight (e.g. a `StepController`-driven pause/
+          stop, wired up one layer above this class). Every `sample_text`/
+          `sample_choice` call streams the response and checks this event
+          between chunks; setting it from another thread makes the current
+          call raise `GenerationCancelledError` promptly instead of running
+          to completion. `None` (the default): calls are never cancelled
+          mid-flight, the same as before this parameter existed. One
+          `Event` is shared across every call this instance makes for its
+          lifetime -- construct a fresh `OllamaLanguageModel` (or clear the
+          event with `.clear()` after handling the cancellation) to make
+          further calls possible again.
     """
     self._model_name = model_name
     self._client = (
@@ -108,9 +146,66 @@ class OllamaLanguageModel(language_model.LanguageModel):
     self._system_message = system_message
     self._terminators = []
     self._seed = seed
+    self._cancel_event = cancel_event
 
     self._measurements = measurements
     self._channel = channel
+
+  def _generate(self, *, prompt: str, options: dict, response_format=None):
+    """Streams one `generate()` call chunk by chunk, concatenating the
+    response text and checking `self._cancel_event` between chunks --
+    the mechanism that makes `GenerationCancelledError` possible (see its
+    docstring). Returns the final chunk (a `GenerateResponse`) with its
+    `response` field replaced by the full concatenated text, so callers
+    can keep treating the result exactly like a non-streaming `generate()`
+    response (`result['response']`, `_extract_token_usage(result)`, ...).
+
+    Raises:
+      GenerationCancelledError: if `self._cancel_event` was already set
+        before this call started (in which case the request is never even
+        sent), or became set partway through the stream (in which case
+        whatever text had already arrived is discarded and the underlying
+        HTTP stream is closed, not just abandoned -- `chunks.close()`
+        triggers a `GeneratorExit` inside ollama-python's own generator,
+        which exits its `with self._client.stream(...) as r:` block and
+        actually releases the connection, rather than leaving a request
+        the server is still generating against dangling).
+    """
+    if self._cancel_event is not None and self._cancel_event.is_set():
+      raise GenerationCancelledError(
+          'Ollama generation cancelled before it started (cancel_event was'
+          ' already set).'
+      )
+    kwargs = {'format': response_format} if response_format else {}
+    chunks = self._client.generate(
+        model=self._model_name,
+        prompt=prompt,
+        think=False,
+        options=options,
+        keep_alive='10m',
+        stream=True,
+        **kwargs,
+    )
+    text_parts = []
+    final_chunk = None
+    for chunk in chunks:
+      text_parts.append(_field(chunk, 'response', '') or '')
+      final_chunk = chunk
+      if self._cancel_event is not None and self._cancel_event.is_set():
+        close = getattr(chunks, 'close', None)
+        if close is not None:
+          close()
+        raise GenerationCancelledError(
+            'Ollama generation cancelled mid-stream (cancel_event was set).'
+        )
+    if final_chunk is None:
+      # An empty stream (zero chunks) shouldn't happen against a real
+      # Ollama server, but a test double or a genuinely empty response
+      # could produce one -- fall back to an empty dict rather than
+      # raising an unrelated UnboundLocalError-style failure below.
+      final_chunk = {}
+    final_chunk['response'] = ''.join(text_parts)
+    return final_chunk
 
   @override
   def sample_text(
@@ -140,13 +235,7 @@ class OllamaLanguageModel(language_model.LanguageModel):
     if self._seed is not None:
       options['seed'] = self._seed
 
-    response = self._client.generate(
-        model=self._model_name,
-        prompt=prompt_with_system_message,
-        think=False,
-        options=options,
-        keep_alive='10m',
-    )
+    response = self._generate(prompt=prompt_with_system_message, options=options)
     result = response['response']
 
     if self._measurements is not None:
@@ -182,8 +271,7 @@ class OllamaLanguageModel(language_model.LanguageModel):
         # (seed, temperature) pair and get stuck resampling the same output.
         options['seed'] = self._seed + attempts
 
-      response = self._client.generate(
-          model=self._model_name,
+      response = self._generate(
           prompt=(
               f'{prompt_with_system_message}.\n'
               # `prompt` already renders the options as e.g. "(a) Danny\n(b)
@@ -197,10 +285,8 @@ class OllamaLanguageModel(language_model.LanguageModel):
               f'{", ".join(responses)}.\n'
               f'Use the following json template: {json.dumps(template)}.'
           ),
-          think=False,
           options=options,
-          format='json',
-          keep_alive='10m',
+          response_format='json',
       )
       try:
         json_data_response = json.loads(response['response'])
