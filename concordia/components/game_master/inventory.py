@@ -31,9 +31,9 @@ from concordia.language_model import language_model
 from concordia.typing import entity as entity_lib
 from concordia.typing import entity_component
 from concordia.utils import concurrency
+from concordia.utils import console_color
 from concordia.utils import helper_functions
 import numpy as np
-import termcolor
 
 _DEFAULT_CHAIN_OF_THOUGHT_PREFIX = (
     'This is a social science experiment. It is structured as a '
@@ -318,7 +318,7 @@ class Inventory(
                       inventory_effects.append(effect)
                       self._add_to_game_master_memory(message=effect)
                       if self._verbose:
-                        print(termcolor.colored(effect, 'yellow'))
+                        print(console_color.colored(effect, 'yellow'))
                   else:
                     chain_of_thought.statement(
                         f'So {formatted_player} would have gained '
@@ -353,14 +353,14 @@ class Inventory(
                     )
                     inventory_effects.append(reason_for_no_change)
                     if self._verbose:
-                      print(termcolor.colored(reason_for_no_change, 'yellow'))
+                      print(console_color.colored(reason_for_no_change, 'yellow'))
           self._inventories = new_inventories
 
         memory.extend(inventory_effects)
 
       display_chain_of_thought = chain_of_thought.view().text().splitlines()
       if self._verbose:
-        print(termcolor.colored(chain_of_thought.view().text(), 'yellow'))
+        print(console_color.colored(chain_of_thought.view().text(), 'yellow'))
 
     self._logging_channel({
         'Key': self._pre_act_label,
@@ -451,14 +451,14 @@ class Score(
       for target in targets:
         if self._verbose:
           print(
-              termcolor.colored(
+              console_color.colored(
                   f'{name} -- target = {target}, inventory = {inventory}',
                   'yellow',
               )
           )
         if target in list(inventory.keys()) and inventory[target] > 0:
           if self._verbose:
-            print(termcolor.colored('    target found in inventory.', 'yellow'))
+            print(console_color.colored('    target found in inventory.', 'yellow'))
           num_on_target = inventory[target]
           player_scores[name] += num_on_target
 

@@ -30,7 +30,7 @@ from concordia.environment import engine as engine_lib
 from concordia.environment import step_controller as step_controller_lib
 from concordia.typing import entity as entity_lib
 from concordia.utils import concurrency
-import termcolor
+from concordia.utils import console_color
 
 
 DEFAULT_CALL_TO_MAKE_OBSERVATION = (
@@ -155,7 +155,7 @@ class Sequential(engine_lib.Engine):
           r'\1[IMAGE DATA]', putative_event
       )
       print(
-          termcolor.colored(
+          console_color.colored(
               f'[GAME MASTER:{game_master.name}] The suggested action or'
               f' event to resolve was: {display_event}',
               _PRINT_COLOR,
@@ -170,7 +170,7 @@ class Sequential(engine_lib.Engine):
     )
     game_master.observe(observation=f'{EVENT_TAG} {result}')
     if verbose:
-      print(termcolor.colored(
+      print(console_color.colored(
           f'[GAME MASTER:{game_master.name}] The resolved event was:'
           f' {result}', _PRINT_COLOR))
 
@@ -186,7 +186,7 @@ class Sequential(engine_lib.Engine):
         )
     )
     if verbose:
-      print(termcolor.colored(
+      print(console_color.colored(
           f'[GAME MASTER:{game_master.name}] Terminate?'
           f' {should_terminate_string}', _PRINT_COLOR))
     return should_terminate_string == entity_lib.BINARY_OPTIONS['affirmative']
@@ -216,7 +216,7 @@ class Sequential(engine_lib.Engine):
     )
     if len(game_masters) == 1:
       if verbose:
-        print(termcolor.colored(
+        print(console_color.colored(
             (f'[SYSTEM] Only one game master available'
              f' ({game_masters[0].name}), skipping the call to'
              ' `next_game_master`.'),
@@ -232,7 +232,7 @@ class Sequential(engine_lib.Engine):
             f' {game_masters_by_name.keys()}'
         )
       if verbose:
-        print(termcolor.colored(
+        print(console_color.colored(
             f'[SYSTEM] Game master (forced): {forced_name}', _PRINT_COLOR))
       return game_masters_by_name[forced_name]
     next_game_master_name = game_master.act(
@@ -243,7 +243,7 @@ class Sequential(engine_lib.Engine):
         )
     )
     if verbose:
-      print(termcolor.colored(
+      print(console_color.colored(
           f'[GAME MASTER:{game_master.name}] Game master:'
           f' {next_game_master_name}', _PRINT_COLOR))
     if next_game_master_name not in game_masters_by_name:
@@ -304,7 +304,7 @@ class Sequential(engine_lib.Engine):
         if observation and observation.strip():
           if verbose:
             print(
-                termcolor.colored(
+                console_color.colored(
                     f'[AGENT:{entity.name}] observed: {observation}',
                     _PRINT_COLOR,
                 )
@@ -326,7 +326,7 @@ class Sequential(engine_lib.Engine):
         # initialize other players and game masters. In this case, we skip the
         # current step and continue to the next step.
         if verbose:
-          print(termcolor.colored(
+          print(console_color.colored(
               '\n[SYSTEM] Skipping the action phase for the current time'
               ' step.\n'))
         if checkpoint_callback is not None:
@@ -347,7 +347,7 @@ class Sequential(engine_lib.Engine):
         continue
 
       if verbose:
-        print(termcolor.colored(
+        print(console_color.colored(
             f'[GAME MASTER:{game_master.name}] {next_entity.name} is next to'
             f' act. They must respond in the format:'
             f' "{entity_spec_to_use}".', _PRINT_COLOR))
@@ -359,7 +359,7 @@ class Sequential(engine_lib.Engine):
       if verbose:
         display_action = _BASE64_TRUNCATE_PATTERN.sub(r'\1[IMAGE DATA]', action)
         print(
-            termcolor.colored(
+            console_color.colored(
                 f'[AGENT:{next_entity.name}] chose action: {display_action}',
                 _PRINT_COLOR,
             )

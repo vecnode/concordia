@@ -23,6 +23,24 @@ from openai import AzureOpenAI
 from openai import OpenAI
 
 
+def _extract_token_usage(response) -> dict[str, int]:
+  """Real prompt/completion token counts from a chat completion response,
+  when the API returned a `usage` block (it doesn't for every backend --
+  some Azure deployments omit it -- so this only adds keys that were
+  actually present)."""
+  usage = getattr(response, 'usage', None)
+  if usage is None:
+    return {}
+  result = {}
+  if usage.prompt_tokens is not None:
+    result['prompt_tokens'] = usage.prompt_tokens
+  if usage.completion_tokens is not None:
+    result['completion_tokens'] = usage.completion_tokens
+  if usage.total_tokens is not None:
+    result['total_tokens'] = usage.total_tokens
+  return result
+
+
 _MAX_MULTIPLE_CHOICE_ATTEMPTS = 20
 _DEFAULT_VERBOSITY = 'low'
 
@@ -105,7 +123,10 @@ class BaseGPTModel(language_model.LanguageModel):
     if self._measurements is not None:
       self._measurements.publish_datum(
           self._channel,
-          {'raw_text_length': len(response.choices[0].message.content)},
+          {
+              'raw_text_length': len(response.choices[0].message.content),
+              **_extract_token_usage(response),
+          },
       )
 
     return response.choices[0].message.content

@@ -26,7 +26,7 @@ from concordia.components.game_master import switch_act
 from concordia.language_model import language_model
 from concordia.typing import entity as entity_lib
 from concordia.typing import entity_component
-import termcolor
+from concordia.utils import console_color
 
 
 # A function that maps number of cooperators to a scalar.
@@ -156,7 +156,7 @@ class PayoffMatrix(
       if is_action_complete:
         if self._verbose:
           print(
-              termcolor.colored(
+              console_color.colored(
                   f'Joint action is complete: {joint_action}', 'yellow'
               )
           )
@@ -190,7 +190,7 @@ class PayoffMatrix(
             memory.add(f'{player_name} learned that {observation}')
 
         if self._verbose:
-          print(termcolor.colored(self._player_scores, 'yellow'))
+          print(console_color.colored(self._player_scores, 'yellow'))
 
     self._logging_channel(copy.deepcopy({
         'Joint Action': self._partial_joint_action,
@@ -208,7 +208,7 @@ class PayoffMatrix(
       }
       if self._verbose:
         print(
-            termcolor.colored(f'Stage {self._stage_idx} is complete.', 'yellow')
+            console_color.colored(f'Stage {self._stage_idx} is complete.', 'yellow')
         )
     return ''
 

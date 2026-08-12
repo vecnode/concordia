@@ -24,6 +24,32 @@ from concordia.utils import sampling
 import ollama
 
 
+def _extract_token_usage(response) -> dict[str, int]:
+  """Real prompt/completion token counts from an Ollama `generate()`
+  response, when the server reports them.
+
+  Ollama's `/api/generate` includes `prompt_eval_count`/`eval_count` on
+  most backends, but not guaranteed on every server version/model
+  combination -- so this only adds keys that were actually present,
+  rather than defaulting missing ones to 0 and silently claiming a real
+  count that isn't one.
+  """
+  get = (
+      response.get if hasattr(response, 'get')
+      else lambda k, d=None: getattr(response, k, d)
+  )
+  prompt_tokens = get('prompt_eval_count')
+  completion_tokens = get('eval_count')
+  usage = {}
+  if prompt_tokens is not None:
+    usage['prompt_tokens'] = prompt_tokens
+  if completion_tokens is not None:
+    usage['completion_tokens'] = completion_tokens
+  if prompt_tokens is not None and completion_tokens is not None:
+    usage['total_tokens'] = prompt_tokens + completion_tokens
+  return usage
+
+
 _MAX_MULTIPLE_CHOICE_ATTEMPTS = 20
 _DEFAULT_TEMPERATURE = 0.5
 _DEFAULT_TERMINATORS = ()
@@ -125,7 +151,8 @@ class OllamaLanguageModel(language_model.LanguageModel):
 
     if self._measurements is not None:
       self._measurements.publish_datum(
-          self._channel, {'raw_text_length': len(result)}
+          self._channel,
+          {'raw_text_length': len(result), **_extract_token_usage(response)},
       )
 
     return result
@@ -214,12 +241,12 @@ class OllamaLanguageModel(language_model.LanguageModel):
       except ValueError:
         continue
       else:
+        token_usage = _extract_token_usage(response)
         if self._measurements is not None:
           self._measurements.publish_datum(
-              self._channel, {'choices_calls': attempts}
+              self._channel, {'choices_calls': attempts, **token_usage}
           )
-        debug = {}
-        return idx, responses[idx], debug
+        return idx, responses[idx], token_usage
 
     raise language_model.InvalidResponseError((
         f'Too many multiple choice attempts.\nLast attempt: {sample}, '
