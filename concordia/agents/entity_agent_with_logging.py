@@ -24,6 +24,34 @@ from concordia.typing import entity_component
 from concordia.utils import measurements as measurements_lib
 
 
+class _LoggingChannelPublisher:
+  """Picklable replacement for the closure `EntityAgentWithLogging.__init__`
+  used to wire a component's logging channel to `self._component_logging`.
+
+  A `lambda` capturing `self` (as the old wiring did) can never be pickled
+  -- `pickle` has no way to serialize a function defined inside another
+  function's scope, regardless of what it references (`TypeError: cannot
+  pickle 'function' object` / `AttributeError: Can't get local object
+  '...<locals>.<lambda>'`, depending on Python version). A plain,
+  module-level callable object has no such restriction: as long as the
+  agent it references is itself picklable, so is this. The reference back
+  to `agent` does create a cycle (agent -> component -> this -> agent),
+  but `pickle` (and `copy`) handle reference cycles natively via
+  memoization, so that's not a problem.
+  """
+
+  def __init__(self, agent: 'EntityAgentWithLogging', channel_name: str):
+    self._agent = agent
+    self._channel_name = channel_name
+
+  def __call__(self, datum: Any) -> None:
+    self._agent._component_logging.publish_datum(  # pylint: disable=protected-access
+        self._channel_name,
+        datum,
+        capture_key=self._agent._active_capture_key,  # pylint: disable=protected-access
+    )
+
+
 class EntityAgentWithLogging(entity_agent.EntityAgent,
                              entity_lib.EntityWithLogging):
   """An agent that exposes the latest information of each component."""
@@ -66,17 +94,12 @@ class EntityAgentWithLogging(entity_agent.EntityAgent,
 
     for component_name, component in self._context_components.items():
       if isinstance(component, entity_component.ComponentWithLogging):
-        channel_name = component_name
         component.set_logging_channel(
-            lambda datum, ch=channel_name: self._component_logging.publish_datum(
-                ch, datum, capture_key=self._active_capture_key
-            )
+            _LoggingChannelPublisher(self, component_name)
         )
     if isinstance(act_component, entity_component.ComponentWithLogging):
       act_component.set_logging_channel(
-          lambda datum: self._component_logging.publish_datum(
-              '__act__', datum, capture_key=self._active_capture_key
-          )
+          _LoggingChannelPublisher(self, '__act__')
       )
 
   # Per-thread capture key routing for async log isolation. The async
